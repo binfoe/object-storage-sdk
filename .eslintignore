@@ -1,0 +1,6 @@
+node_modules
+/lib
+.husky
+.vscode
+.idea
+/src/test.ts

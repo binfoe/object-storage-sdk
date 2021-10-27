@@ -1,6 +1,6 @@
 {
   "name": "object-storage-sdk",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "object storage sdk",
   "keywords": [
     "oss",
@@ -21,10 +21,7 @@
   "author": "Yuhang Ge <abeyuhang@gmail.com>",
   "license": "ISC",
   "devDependencies": {
-    "@types/minio": "^7.0.11",
     "@types/node": "^16.11.6",
-    "@types/pump": "^1.1.1",
-    "@types/xml2js": "^0.4.9",
     "@typescript-eslint/eslint-plugin": "^5.2.0",
     "@typescript-eslint/parser": "^5.2.0",
     "eslint": "^8.1.0",
@@ -33,15 +30,16 @@
     "eslint-plugin-prettier": "^4.0.0",
     "husky": "^7.0.4",
     "lint-staged": "^11.2.6",
-    "nodemon": "^2.0.14",
     "prettier": "^2.4.1",
-    "pump": "^3.0.0",
-    "react": "^17.0.2",
     "typescript": "^4.4.4"
   },
   "dependencies": {
+    "@types/minio": "^7.0.11",
+    "@types/pump": "^1.1.1",
+    "@types/xml2js": "^0.4.9",
     "date-fns": "^2.25.0",
     "minio": "^7.0.19",
+    "pump": "^3.0.0",
     "raw-body": "^2.4.1",
     "xml2js": "^0.4.23"
   }

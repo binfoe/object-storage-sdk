@@ -251,10 +251,10 @@ export abstract class BaseObjectStorageSDK {
       },
       (res) => {
         const contentType = res.headers['content-type'];
-        console.log(res.statusCode, contentType);
+        // console.log(res.statusCode, contentType);
         if (res.statusCode < 200 || res.statusCode >= 300) {
           this.getBody(res, contentType, (err, result) => {
-            console.log(result);
+            // console.log(result);
             return finish(new Error(res.statusMessage), err ? null : result);
           });
         } else if (!options.returnStream) {

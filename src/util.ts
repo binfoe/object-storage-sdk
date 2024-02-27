@@ -1,4 +1,4 @@
-import { Writable } from 'stream';
+import type { Writable } from 'stream';
 import { formatRFC7231 } from 'date-fns';
 
 export const TIMEOUT_ERROR = new Error('waitForDrain timeout');
@@ -44,7 +44,7 @@ export async function waitForDrain(s: Writable, timeout = 10000): Promise<void> 
         s.off('close', ctx.onClose);
         s.off('end', ctx.onEnd);
         clearTimeout(ctx.tm);
-        ctx.onDrain = ctx.onEnd = ctx.onError = ctx.onClose = ctx.tm = ctx.clear = null;
+        // ctx.onDrain = ctx.onEnd = ctx.onError = ctx.onClose = ctx.tm = ctx.clear = null;
       },
     };
     s.on('drain', ctx.onDrain);

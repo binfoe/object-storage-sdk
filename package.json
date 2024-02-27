@@ -1,17 +1,21 @@
 {
   "name": "object-storage-sdk",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "object storage sdk",
   "keywords": [
     "oss",
     "cos",
     "ks3"
   ],
-  "main": "lib/index.js",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "esnext": "dist/index.mjs",
+  "types": "src/index.ts",
   "scripts": {
-    "watch": "tsc -w",
-    "tsc": "tsc",
-    "lint": "eslint './{src,bin}/**/*.{ts,js}' --fix",
+    "bundle": "ts-node --project tsconfig.json scripts/esbuild.ts",
+    "build": "pnpm lint && rm -rf dist && NODE_ENV=production pnpm bundle",
+    "watch": "WATCH=true pnpm bundle",
+    "lint": "tsc --noEmit && eslint './{src,scripts}/**/*.{ts,tsx}' --fix",
     "lint-staged": "lint-staged",
     "prepare": "husky install"
   },
@@ -21,26 +25,33 @@
   "author": "Yuhang Ge <abeyuhang@gmail.com>",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "^16.11.6",
-    "@typescript-eslint/eslint-plugin": "^5.2.0",
-    "@typescript-eslint/parser": "^5.2.0",
-    "eslint": "^8.1.0",
-    "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-import": "^2.25.2",
-    "eslint-plugin-prettier": "^4.0.0",
-    "husky": "^7.0.4",
-    "lint-staged": "^11.2.6",
-    "prettier": "^2.4.1",
-    "typescript": "^4.4.4"
+    "@types/node": "^20.11.20",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "esbuild": "^0.20.1",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-define-config": "^2.1.0",
+    "eslint-plugin-import": "npm:eslint-plugin-i@^2.29.1",
+    "eslint-plugin-prettier": "^5.1.3",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@types/minio": "^7.0.11",
-    "@types/pump": "^1.1.1",
-    "@types/xml2js": "^0.4.9",
-    "date-fns": "^2.25.0",
-    "minio": "^7.0.19",
+    "@types/pump": "^1.1.3",
+    "@types/xml2js": "^0.4.14",
+    "date-fns": "^3.3.1",
+    "minio": "^7.1.3",
     "pump": "^3.0.0",
-    "raw-body": "^2.4.1",
-    "xml2js": "^0.4.23"
+    "raw-body": "^2.5.2",
+    "xml2js": "^0.6.2"
   }
 }

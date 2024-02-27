@@ -1,6 +1,7 @@
-import { request, Agent, IncomingMessage, ClientRequest } from 'http';
+import type { IncomingMessage, ClientRequest, OutgoingHttpHeaders } from 'http';
+import { request, Agent } from 'http';
 import { createHash } from 'crypto';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 import pump from 'pump';
 import { Parser as XMLParser } from 'xml2js';
 import getRawBody from 'raw-body';
@@ -34,10 +35,12 @@ export type FetchOptions = {
   host: string;
   path: string;
   returnStream: boolean;
-  headers: {
-    Authorization?: string;
-    [s: string]: string;
-  };
+  // headers?:
+  //   | ({
+  //       Authorization?: string;
+  //     } & Record<string, string>)
+  //   | null;
+  headers?: OutgoingHttpHeaders;
   body?: Readable;
   limit?: number;
   calcHash?: HashType;
@@ -55,7 +58,7 @@ export type FetchResult = {
   [prop: string]: unknown;
 };
 export type ReadObjectResult = {
-  stream: Readable;
+  stream?: Readable;
   headers?: Record<string, string>;
 };
 
@@ -71,7 +74,7 @@ export abstract class BaseObjectStorageSDK {
   private _xmlParser: XMLParser;
   private _timeout: number;
   constructor(config: BaseSDKConfig) {
-    this._timeout = config.timeout || 30000;
+    this._timeout = config.timeout ?? 30000;
   }
   protected get _XMLParser() {
     if (!this._xmlParser)
@@ -94,8 +97,8 @@ export abstract class BaseObjectStorageSDK {
     body: Readable,
     req: ClientRequest,
     limit: number,
-    calcHash: HashType,
-    callback: (err?: Error, hash?: string) => void,
+    calcHash: HashType | undefined,
+    callback: (err?: Error | null, hash?: string | null) => void,
   ): void {
     if (!limit && !calcHash) {
       // 如果不限制文件大小，也不需要计算哈希，则直接使用 pump 转发即可。
@@ -121,7 +124,7 @@ export abstract class BaseObjectStorageSDK {
           req.destroy();
         }
         ctx.cleanup();
-        callback(err, calcHash ? hash.digest('hex') : null);
+        callback(err, hash?.digest('hex'));
       },
       cleanup(): void {
         // console.log('clear pipe req');
@@ -134,7 +137,7 @@ export abstract class BaseObjectStorageSDK {
         req.off('end', ctx.onEnd);
         req.off('error', ctx.onError);
         req.off('close', ctx.onClose);
-        ctx.onAborted = ctx.onClose = ctx.onEnd = ctx.onData = ctx.onError = ctx.cleanup = ctx.done = null;
+        // ctx.onAborted = ctx.onClose = ctx.onEnd = ctx.onData = ctx.onError = ctx.cleanup = ctx.done = null;
       },
       onClose(): void {
         if (complete) return;
@@ -158,9 +161,8 @@ export abstract class BaseObjectStorageSDK {
           ctx.done(TOO_LARGE_ERR);
           return;
         }
-        if (calcHash) {
-          hash.update(chunk);
-        }
+        hash?.update(chunk);
+
         // console.log('write!');
         if (!req.write(chunk)) {
           // console.log('drain!');
@@ -194,7 +196,7 @@ export abstract class BaseObjectStorageSDK {
   protected getBody(
     res: IncomingMessage,
     contentType: string,
-    callback: (err: Error, body?: Record<string, string>) => void,
+    callback: (err: Error | null, body?: Record<string, string>) => void,
   ): void {
     getRawBody(res, true, (err, body) => {
       if (err) return callback(err);
@@ -217,19 +219,19 @@ export abstract class BaseObjectStorageSDK {
           callback(ex);
         }
       } else {
-        callback(new Error('unsupported content-type:' + contentType));
+        callback(new Error(`unsupported content-type:${contentType}`));
       }
     });
   }
 
   protected _fetch(
     options: FetchOptions,
-    callback: (err: Error, result?: FetchResult, requestBodyHash?: string) => void,
+    callback: (err: Error | null, result?: FetchResult, requestBodyHash?: string) => void,
   ): void {
     let done = false;
-    let hash: string = null;
+    let hash: string | null = null;
 
-    function finish(err: Error, result?: FetchResult): void {
+    function finish(err: Error | null, result?: FetchResult): void {
       if (done) return;
       if (!err && options.calcHash && !hash) {
         err = new Error('unexpected error: calculated hash is empty');
@@ -238,28 +240,29 @@ export abstract class BaseObjectStorageSDK {
       }
       // console.log(err);
       done = true;
-      process.nextTick(() => callback(err, result || null, hash));
+      process.nextTick(() => callback(err, result ?? undefined, hash ?? undefined));
     }
     const req = request(
       {
         method: options.method,
         path: options.path,
         host: options.host,
-        headers: options.headers,
+        headers: options.headers ?? undefined,
         agent: this._GlobalAgent,
         timeout: this._timeout,
       },
       (res) => {
-        const contentType = res.headers['content-type'];
+        const contentType = res.headers['content-type'] ?? '';
+        const statusCode = res.statusCode ?? 404;
         // console.log(res.statusCode, contentType);
-        if (res.statusCode < 200 || res.statusCode >= 300) {
+        if (statusCode < 200 || statusCode >= 300) {
           this.getBody(res, contentType, (err, result) => {
             // console.log(result);
-            return finish(new Error(res.statusMessage), err ? null : result);
+            return finish(new Error(res.statusMessage), err ? undefined : result);
           });
         } else if (!options.returnStream) {
           this.getBody(res, contentType, (err, result) => {
-            return finish(err, err ? null : result);
+            return finish(err, err ? undefined : result);
           });
         } else {
           const headers: Record<string, string> = {};
@@ -280,14 +283,20 @@ export abstract class BaseObjectStorageSDK {
     req.on('error', onReqErr);
 
     if (options.body) {
-      this._pipeReqeuest(options.body, req, options.limit, options.calcHash, function (err: Error, bodyHash: string) {
-        if (done) return;
-        if (err) {
-          finish(err);
-        } else {
-          hash = bodyHash;
-        }
-      });
+      this._pipeReqeuest(
+        options.body,
+        req,
+        options.limit ?? 0,
+        options.calcHash,
+        function (err: Error, bodyHash: string) {
+          if (done) return;
+          if (err) {
+            finish(err);
+          } else {
+            hash = bodyHash;
+          }
+        },
+      );
     } else {
       req.end();
     }

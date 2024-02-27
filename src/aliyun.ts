@@ -1,14 +1,14 @@
 import crypto from 'crypto';
-import {
+import type { OutgoingHttpHeaders } from 'http';
+import type {
   Readable,
   FetchResult,
   FetchOptions,
   ReadObjectResult,
   WriteObjectOptions,
   BaseSDKConfig,
-  BaseObjectStorageSDK,
-  EMPTY_OPTS,
 } from './common';
+import { BaseObjectStorageSDK, EMPTY_OPTS } from './common';
 import { gmt } from './util';
 
 export interface AliyunSDKConfig extends BaseSDKConfig {
@@ -21,34 +21,34 @@ export class AliyunObjectStorageSDK extends BaseObjectStorageSDK {
     super(config);
     this._config = config;
   }
-  private _getAuth(objectKey: string, options: FetchOptions, date: string): string {
+  private _getAuth(objectKey: string, method: string, headers: OutgoingHttpHeaders | undefined, date: string): string {
     // https://help.aliyun.com/document_detail/31951.html
     const contentString =
-      `${options.method}\n` +
-      `${options.headers?.['Content-MD5'] || ''}\n` + // content-md5
-      `${options.headers?.['Content-Type'] || ''}\n` + // content-type
-      `${date}\n` + // Date
-      calcCanonicalizedOSSHeaders(options.headers) + // CanonicalizedOSSHeaders
-      `/${this._config.bucket}/${objectKey}`; // CanonicalizedResource
+      `${method}\n` +
+      `${headers?.['Content-MD5'] ?? ''}\n` + // content-md5
+      `${headers?.['Content-Type'] ?? ''}\n` + // content-type
+      `${date}\n${
+        // Date
+        calcCanonicalizedOSSHeaders(headers) // CanonicalizedOSSHeaders
+      }/${this._config.bucket}/${objectKey}`; // CanonicalizedResource
 
     const signature = crypto.createHmac('sha1', this._config.secretKey).update(contentString).digest('base64');
 
-    return 'OSS ' + this._config.accessKey + ':' + signature;
+    return `OSS ${this._config.accessKey}:${signature}`;
   }
 
   readObject(filename: string): Promise<ReadObjectResult | null> {
     return new Promise((resolve, reject) => {
+      const dt = gmt();
       const options: FetchOptions = {
         method: 'GET',
         host: `${this._config.bucket}.${this._config.region}.aliyuncs.com`,
         path: `/${filename}`,
-        headers: null,
         returnStream: true,
-      };
-      const dt = gmt();
-      options.headers = {
-        Date: dt,
-        Authorization: this._getAuth(filename, options, dt),
+        headers: {
+          Date: dt,
+          Authorization: this._getAuth(filename, 'GET', undefined, dt),
+        },
       };
       this._fetch(options, (err: Error, result: FetchResult) => {
         if (!err) {
@@ -57,7 +57,7 @@ export class AliyunObjectStorageSDK extends BaseObjectStorageSDK {
             stream: result.body,
           });
         }
-        if (!result || !result.Error) {
+        if (!result?.Error) {
           return reject(err);
         }
         if (result.Error.Code === 'NoSuchKey') {
@@ -71,28 +71,31 @@ export class AliyunObjectStorageSDK extends BaseObjectStorageSDK {
   }
   writeObject(filename: string, req: Readable, options: WriteObjectOptions = EMPTY_OPTS): Promise<void | string> {
     return new Promise((resolve, reject) => {
+      const dt = gmt();
+
+      const headers: OutgoingHttpHeaders = {
+        ...options.headers,
+        Date: dt,
+        Authorization: this._getAuth(filename, 'PUT', options.headers, dt),
+      };
+
+      if (options.contentEncoding) {
+        headers['Content-Encoding'] = options.contentEncoding;
+      }
+      if (options.contentType) {
+        headers['Content-Type'] = options.contentType;
+      }
       const fetchOptions: FetchOptions = {
         method: 'PUT',
         host: `${this._config.bucket}.${this._config.region}.aliyuncs.com`,
         path: `/${filename}`,
-        headers: null,
         returnStream: false,
         body: req,
         limit: options.limit,
         calcHash: options.calcHash,
+        headers,
       };
-      const dt = gmt();
-      fetchOptions.headers = {
-        ...options.headers,
-        Date: dt,
-        Authorization: this._getAuth(filename, fetchOptions, dt),
-      };
-      if (options.contentEncoding) {
-        fetchOptions.headers['Content-Encoding'] = options.contentEncoding;
-      }
-      if (options.contentType) {
-        fetchOptions.headers['Content-Type'] = options.contentType;
-      }
+
       this._fetch(fetchOptions, (err, result, reqBodyHash) => {
         if (!err) {
           // logger.debug(result);
@@ -106,24 +109,23 @@ export class AliyunObjectStorageSDK extends BaseObjectStorageSDK {
         // } else {
         //   logger.serror('ALI-OSS', JSON.stringify(result.Error));
         // }
-        reject(result?.Error || err);
+        reject(result?.Error ?? err);
       });
     });
   }
 
   deleteObject(filename: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      const dt = gmt();
       const options: FetchOptions = {
         method: 'DELETE',
         host: `${this._config.bucket}.${this._config.region}.aliyuncs.com`,
         path: `/${filename}`,
-        headers: null,
         returnStream: false,
-      };
-      const dt = gmt();
-      options.headers = {
-        Date: dt,
-        Authorization: this._getAuth(filename, options, dt),
+        headers: {
+          Date: dt,
+          Authorization: this._getAuth(filename, 'DELETE', undefined, dt),
+        },
       };
       this._fetch(options, (err, result) => {
         if (!err) {
@@ -135,13 +137,13 @@ export class AliyunObjectStorageSDK extends BaseObjectStorageSDK {
         // } else {
         //   logger.serror('TX-OSS', JSON.stringify(result.Error));
         // }
-        reject(result?.Error || err);
+        reject(result?.Error ?? err);
       });
     });
   }
 }
 
-function calcCanonicalizedOSSHeaders(headers: Record<string, string>): string {
+function calcCanonicalizedOSSHeaders(headers?: OutgoingHttpHeaders): string {
   if (!headers) return '';
   const props = [];
   for (const k in headers) {
@@ -151,5 +153,5 @@ function calcCanonicalizedOSSHeaders(headers: Record<string, string>): string {
     }
   }
   // 如果设置CanonicalizedOSSHeaders为空，则无需在最后添加分隔符\n
-  return props.length ? props.sort().join('\n') + '\n' : '';
+  return props.length ? `${props.sort().join('\n')}\n` : '';
 }

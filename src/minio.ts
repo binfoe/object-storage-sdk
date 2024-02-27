@@ -1,14 +1,9 @@
 import crypto from 'crypto';
 import { Transform } from 'stream';
-import { Client, ClientOptions } from 'minio';
-import {
-  Readable,
-  WriteObjectOptions,
-  EMPTY_OPTS,
-  ReadObjectResult,
-  BaseSDKConfig,
-  BaseObjectStorageSDK,
-} from './common';
+import type { ClientOptions } from 'minio';
+import { Client } from 'minio';
+import type { Readable, WriteObjectOptions, ReadObjectResult, BaseSDKConfig } from './common';
+import { EMPTY_OPTS, BaseObjectStorageSDK } from './common';
 
 export type MinioSDKConfig = BaseSDKConfig & Exclude<ClientOptions, 'secretKey' | 'accessKey'>;
 
@@ -51,7 +46,7 @@ export class MinioObjectStorageSDK extends BaseObjectStorageSDK {
   }
   async writeObject(filename: string, req: Readable, options: WriteObjectOptions = EMPTY_OPTS) {
     const client = await this._getClient();
-    const meta = options.headers || {};
+    const meta = options.headers ?? {};
     if (options.contentEncoding) {
       meta['Content-Encoding'] = options.contentEncoding;
     }

@@ -1,15 +1,8 @@
 node_modules
 **/.DS_Store
+.npmrc
 .husky
-.eslintignore
-.eslintrc
 .gitignore
-.npmignore
-package-lock.json
-pnpm-lock.yaml
-.pnpm-debug.log
 .idea
 .vscode
-/src
-tsconfig.json
-/lib/test.*
+/scripts

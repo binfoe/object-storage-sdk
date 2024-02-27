@@ -1,14 +1,14 @@
 import crypto from 'crypto';
-import {
+import type { OutgoingHttpHeaders } from 'http';
+import type {
   Readable,
   FetchResult,
   FetchOptions,
   ReadObjectResult,
   WriteObjectOptions,
-  BaseObjectStorageSDK,
   BaseSDKConfig,
-  EMPTY_OPTS,
 } from './common';
+import { BaseObjectStorageSDK, EMPTY_OPTS } from './common';
 
 function getObjectKeys(obj: Record<string, unknown>): string[] {
   const list = Object.keys(obj);
@@ -33,11 +33,11 @@ function obj2str(obj: Record<string, unknown>): string {
   const keyList = getObjectKeys(obj);
   for (let i = 0; i < keyList.length; i++) {
     let key = keyList[i];
-    let val = obj[key] === undefined || obj[key] === null ? '' : '' + obj[key];
+    let val = obj[key] === undefined || obj[key] === null ? '' : `${obj[key]}`;
     key = key.toLowerCase();
     key = camSafeUrlEncode(key);
     val = camSafeUrlEncode(val) || '';
-    list.push(key + '=' + val);
+    list.push(`${key}=${val}`);
   }
   return list.join('&');
 }
@@ -51,14 +51,14 @@ export class TxyunObjectStorageSDK extends BaseObjectStorageSDK {
     super(config);
     this._config = config;
   }
-  private _getAuth(options: FetchOptions): string {
+  private _getAuth(method: string, path: string, headers: OutgoingHttpHeaders | undefined): string {
     const secretId = this._config.accessKey;
     const secretKey = this._config.secretKey;
 
     // 签名有效起止时间
     const now = ((Date.now() / 1000) | 0) - 1;
-    const keyTime = now + ';' + (now + 900);
-    const headerList = options.headers ? getObjectKeys(options.headers).join(';').toLowerCase() : '';
+    const keyTime = `${now};${now + 900}`;
+    const headerList = headers ? getObjectKeys(headers).join(';').toLowerCase() : '';
     const paramList = ''; // getObjectKeys(queryParams).join(';').toLowerCase();
 
     // 签名算法说明文档：https://www.qcloud.com/document/product/436/7778
@@ -66,51 +66,33 @@ export class TxyunObjectStorageSDK extends BaseObjectStorageSDK {
     const signKey = crypto.createHmac('sha1', secretKey).update(keyTime).digest('hex');
 
     // 步骤二：构成 FormatString
-    const formatString =
-      options.method.toLowerCase() +
-      '\n' +
-      options.path +
-      '\n' +
-      '\n' +
-      (options.headers ? obj2str(options.headers) : '') +
-      '\n';
+    const formatString = `${method.toLowerCase()}\n${path}\n` + `\n${headers ? obj2str(headers) : ''}\n`;
     // formatString = Buffer.from(formatString, 'utf8');
 
     // 步骤三：计算 StringToSign
     const res = crypto.createHash('sha1').update(formatString).digest('hex');
-    const stringToSign = 'sha1\n' + keyTime + '\n' + res + '\n';
+    const stringToSign = `sha1\n${keyTime}\n${res}\n`;
 
     // 步骤四：计算 Signature
     const signature = crypto.createHmac('sha1', signKey).update(stringToSign).digest('hex');
 
     // 步骤五：构造 Authorization
     return (
-      'q-sign-algorithm=sha1' +
-      '&q-ak=' +
-      secretId +
-      '&q-sign-time=' +
-      keyTime +
-      '&q-key-time=' +
-      keyTime +
-      '&q-header-list=' +
-      headerList +
-      '&q-url-param-list=' +
-      paramList +
-      '&q-signature=' +
-      signature
+      `q-sign-algorithm=sha1` +
+      `&q-ak=${secretId}&q-sign-time=${keyTime}&q-key-time=${keyTime}&q-header-list=${headerList}&q-url-param-list=${paramList}&q-signature=${signature}`
     );
   }
   readObject(filename: string): Promise<ReadObjectResult | null> {
     return new Promise((resolve, reject) => {
+      const path = `/${filename}`;
       const options: FetchOptions = {
         method: 'GET',
         host: `${this._config.bucket}-${this._config.appId}.cos.${this._config.region}.myqcloud.com`,
-        path: `/${filename}`,
-        headers: null,
+        path,
         returnStream: true,
-      };
-      options.headers = {
-        Authorization: this._getAuth(options),
+        headers: {
+          Authorization: this._getAuth('GET', path, undefined),
+        },
       };
       this._fetch(options, (err: Error, result: FetchResult) => {
         if (!err) {
@@ -119,7 +101,7 @@ export class TxyunObjectStorageSDK extends BaseObjectStorageSDK {
             stream: result.body,
           });
         }
-        if (!result || !result.Error) {
+        if (!result?.Error) {
           return reject(err);
         }
         if (result.Error.Code === 'NoSuchKey') {
@@ -133,26 +115,28 @@ export class TxyunObjectStorageSDK extends BaseObjectStorageSDK {
   }
   writeObject(filename: string, req: Readable, options: WriteObjectOptions = EMPTY_OPTS): Promise<void | string> {
     return new Promise((resolve, reject) => {
+      const path = `/${filename}`;
+      const headers: OutgoingHttpHeaders = {
+        ...options.headers,
+        Authorization: this._getAuth('PUT', path, options.headers),
+      };
+      if (options.contentEncoding) {
+        headers['Content-Encoding'] = options.contentEncoding;
+      }
+      if (options.contentType) {
+        headers['Content-Type'] = options.contentType;
+      }
       const fetchOptions: FetchOptions = {
         method: 'PUT',
+        path,
         host: `${this._config.bucket}-${this._config.appId}.cos.${this._config.region}.myqcloud.com`,
-        path: `/${filename}`,
-        headers: null,
+        headers,
         returnStream: false,
         body: req,
         limit: options.limit,
         calcHash: options.calcHash,
       };
-      fetchOptions.headers = {
-        ...options.headers,
-        Authorization: this._getAuth(fetchOptions),
-      };
-      if (options.contentEncoding) {
-        fetchOptions.headers['Content-Encoding'] = options.contentEncoding;
-      }
-      if (options.contentType) {
-        fetchOptions.headers['Content-Type'] = options.contentType;
-      }
+
       this._fetch(fetchOptions, (err, result, reqBodyHash) => {
         if (!err) {
           // logger.debug(result);
@@ -166,21 +150,21 @@ export class TxyunObjectStorageSDK extends BaseObjectStorageSDK {
         // } else {
         //   logger.serror('TX-OSS', JSON.stringify(result.Error));
         // }
-        reject(result?.Error || err);
+        reject(result?.Error ?? err);
       });
     });
   }
   deleteObject(filename: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      const path = `/${filename}`;
       const options: FetchOptions = {
         method: 'DELETE',
         host: `${this._config.bucket}-${this._config.appId}.cos.${this._config.region}.myqcloud.com`,
-        path: `/${filename}`,
-        headers: null,
+        path,
+        headers: {
+          Authorization: this._getAuth('DELETE', path, undefined),
+        },
         returnStream: false,
-      };
-      options.headers = {
-        Authorization: this._getAuth(options),
       };
       this._fetch(options, (err, result) => {
         if (!err) {
@@ -192,7 +176,7 @@ export class TxyunObjectStorageSDK extends BaseObjectStorageSDK {
         // } else {
         //   logger.serror('TX-OSS', JSON.stringify(result.Error));
         // }
-        reject(result?.Error || err);
+        reject(result?.Error ?? err);
       });
     });
   }

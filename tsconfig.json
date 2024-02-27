@@ -1,17 +1,18 @@
 {
   "compilerOptions": {
-      "module": "commonjs",
-      "esModuleInterop": true,
-      "allowSyntheticDefaultImports": true,
-      "target": "es6",
-      "noImplicitAny": true,
-      "moduleResolution": "node",
-      "sourceMap": true,
-      "outDir": "lib",
-      "declaration": true,
-      "baseUrl": ".",
+    "module": "Node16",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitReturns": true,
+    "stripInternal": true,
+    "alwaysStrict": true,
+    "moduleResolution": "Node16",
+    "noEmit": true,
+    "baseUrl": "."
   },
-  "include": [
-      "src/**/*"
-  ]
+  "include": ["./src/**/*", "./scripts/**/*", ".eslintrc.js", ".prettierrc.js"]
 }

@@ -1,6 +1,6 @@
 {
   "name": "object-storage-sdk",
-  "version": "0.0.5",
+  "version": "0.0.8",
   "description": "object storage sdk",
   "keywords": [
     "oss",
